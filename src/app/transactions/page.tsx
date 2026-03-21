@@ -45,13 +45,13 @@ function useExport() {
   }
   async function exportXLSX(accFilter: string) {
     try {
-      const XLSX = (await import('xlsx')).default
+      // xlsx is a CommonJS module — import the namespace, not .default
+      const XLSX = await import('xlsx')
       const { headers, rows } = buildRows(accFilter)
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
       ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 20 }]
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Transactions')
-      // Use write + Blob instead of writeFile — works in browser/Vercel
       const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
       const accName = accFilter === 'all'
         ? 'all'
@@ -154,9 +154,9 @@ function ImportModal({ onClose }: { onClose: () => void }) {
         row.push(cell.trim()); return row
       })
     } else if (ext === 'xlsx' || ext === 'xls') {
-      const XLSX = (await import('xlsx')).default
+      // xlsx is a CommonJS module — import namespace directly, not .default
+      const XLSX = await import('xlsx')
       const buf = await file.arrayBuffer()
-      // raw:true — prevents SheetJS mangling numbers/dates; cellDates:false keeps dates as serial numbers so detectDate handles them
       const wb = XLSX.read(buf, { type: 'array', raw: true, cellDates: false })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rawData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true }) as unknown[][]
