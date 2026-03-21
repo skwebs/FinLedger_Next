@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useStore } from '@/store/useStore'
 import AppShell from '@/components/layout/AppShell'
 import DataProvider from '@/components/layout/DataProvider'
@@ -19,7 +19,6 @@ function MonthPicker() {
 function AccCard({ acc }: { acc: Account }) {
   const { accounts, transactions, month, deleteAccount } = useStore()
   const { toast } = useToast()
-  const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [addTxOpen, setAddTxOpen] = useState(false)
@@ -56,13 +55,13 @@ function AccCard({ acc }: { acc: Account }) {
     <>
       <div className="card" style={{ borderLeft: `3px solid ${acc.color}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-          <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => router.push(`/accounts/${acc.id}`)}>
+          <Link href={`/accounts/${acc.id}`} style={{ cursor: 'pointer', flex: 1, textDecoration: 'none' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
               <div style={{ width: 10, height: 10, borderRadius: '50%', background: acc.color }} />
-              <div className="hd" style={{ fontSize: 15, fontWeight: 700 }}>{acc.name}</div>
+              <div className="hd" style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text)' }}>{acc.name}</div>
             </div>
             <div style={{ fontSize: 10, color: 'var(--color-muted)', paddingLeft: 18 }}>{acc.type.replace('_', ' ').toUpperCase()}</div>
-          </div>
+          </Link>
           {balDisplay}
         </div>
 
@@ -109,7 +108,7 @@ function AccCard({ acc }: { acc: Account }) {
         )}
 
         <div style={{ display: 'flex', gap: 7 }}>
-          <button className="edbtn" onClick={() => router.push(`/accounts/${acc.id}`)}>View</button>
+          <Link href={`/accounts/${acc.id}`} style={{ flex: 1, background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, color: 'var(--color-text)', padding: 9, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>View</Link>
           <button className="edbtn" onClick={() => setEditing(true)}>✏️ Edit</button>
           <button className="btn btn-primary" onClick={() => setAddTxOpen(true)} style={{ flex: 2, borderRadius: 10, padding: 9, fontSize: 13 }}>+ Txn</button>
           <button className="dlbtn" style={{ flex: 'none', padding: '9px 12px' }} onClick={() => setConfirming(true)}>🗑️</button>
