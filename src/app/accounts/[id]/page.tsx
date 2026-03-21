@@ -16,13 +16,37 @@ function MonthPicker() {
 }
 
 function AccDetailContent({ id }: { id: string }) {
-  const { accounts, transactions, month } = useStore()
+  const { accounts, transactions, month, loaded } = useStore()
   const [ccOffset, setCcOffset] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
 
   const acc = accounts.find(a => a.id === id)
-  if (!acc) return <div style={{ padding: 24, color: 'var(--color-muted)' }}>Account not found</div>
+
+  // Show skeleton while store is hydrating
+  if (!loaded || !acc) {
+    return (
+      <AppShell title="Account" showBack backHref="/accounts">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 12 }}>
+          {[120, 60, 80].map((h, i) => (
+            <div key={i} style={{
+              height: h, borderRadius: 16,
+              background: 'var(--color-card)',
+              border: '1px solid var(--color-border)',
+              animation: 'shimmer 1.4s ease-in-out infinite',
+              opacity: 1 - i * 0.15,
+            }} />
+          ))}
+        </div>
+        <style>{`
+          @keyframes shimmer {
+            0%, 100% { opacity: 0.5; }
+            50%       { opacity: 1;   }
+          }
+        `}</style>
+      </AppShell>
+    )
+  }
 
   const isCC = acc.type === 'credit_card' && acc.billing_day
   const isPerson = acc.type === 'person'

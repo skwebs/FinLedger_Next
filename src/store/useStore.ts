@@ -7,10 +7,11 @@ interface Store {
   accounts: Account[]
   transactions: Transaction[]
   loaded: boolean
+  loading: boolean
   userId: string | null
   month: string
   // Actions
-  loadData: () => Promise<void>
+  loadData: (force?: boolean) => Promise<void>
   setMonth: (m: string) => void
   addAccount: (data: Omit<Account, 'id' | 'user_id' | 'created_at'>) => Promise<Account>
   updateAccount: (id: string, data: Partial<Account>) => Promise<void>
@@ -52,14 +53,17 @@ export const useStore = create<Store>((set, get) => ({
   accounts: [],
   transactions: [],
   loaded: false,
+  loading: false,
   userId: null,
   month: new Date().toISOString().slice(0, 7),
 
   setMonth: (m) => set({ month: m }),
 
-  loadData: async () => {
+  loadData: async (force = false) => {
+    // Skip if already loaded unless forced (e.g. after add/delete)
+    if (get().loaded && !force) return
+    set({ loading: true })
     const supabase = db()
-    // Get current user so we can attach user_id to every insert
     const { data: { user } } = await supabase.auth.getUser()
     const [ar, tr] = await Promise.all([
       supabase.from('accounts').select('*').order('created_at', { ascending: true }),
@@ -70,6 +74,7 @@ export const useStore = create<Store>((set, get) => ({
       accounts: (ar.data || []) as Account[],
       transactions: (tr.data || []) as Transaction[],
       loaded: true,
+      loading: false,
     })
   },
 
