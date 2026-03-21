@@ -19,6 +19,7 @@ interface Store {
   addTransaction: (data: Omit<Transaction, 'id' | 'user_id' | 'created_at'>) => Promise<Transaction>
   updateTransaction: (id: string, data: Partial<Transaction>) => Promise<void>
   deleteTransaction: (id: string) => Promise<void>
+  bulkDeleteTransactions: (ids: string[]) => Promise<void>
   recalcBalances: () => Promise<void>
 }
 
@@ -156,6 +157,24 @@ export const useStore = create<Store>((set, get) => ({
     set(s => ({
       accounts: afterReverse,
       transactions: s.transactions.filter(t => t.id !== id),
+    }))
+  },
+
+  bulkDeleteTransactions: async (ids) => {
+    if (!ids.length) return
+    const supabase = db()
+    // Reverse balances for all selected transactions first
+    let accounts = get().accounts
+    const txns = get().transactions.filter(t => ids.includes(t.id))
+    for (const tx of txns) {
+      accounts = await applyBalance(accounts, tx, -1)
+    }
+    // Delete all in one query using IN filter
+    const { error } = await supabase.from('transactions').delete().in('id', ids)
+    if (error) throw error
+    set(s => ({
+      accounts,
+      transactions: s.transactions.filter(t => !ids.includes(t.id)),
     }))
   },
 

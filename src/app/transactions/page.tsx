@@ -322,12 +322,18 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 
 // ─── Main page ────────────────────────────────────
 function TransactionsContent() {
-  const { transactions, accounts } = useStore()
+  const { transactions, accounts, bulkDeleteTransactions } = useStore()
+  const { toast } = useToast()
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  // Bulk select state
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   let filtered = [...transactions].sort((a, b) => new Date(b.txn_at).getTime() - new Date(a.txn_at).getTime())
   if (filter !== 'all') filtered = filtered.filter(t => t.type === filter)
@@ -346,61 +352,177 @@ function TransactionsContent() {
     groups[key].push(t)
   })
 
+  const allIds = filtered.map(t => t.id)
+  const allSelected = allIds.length > 0 && allIds.every(id => selected.has(id))
+  const someSelected = allIds.some(id => selected.has(id))
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(allIds))
+    }
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelected(new Set())
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true)
+    try {
+      const ids = Array.from(selected)
+      await bulkDeleteTransactions(ids)
+      toast(`Deleted ${ids.length} transaction${ids.length !== 1 ? 's' : ''}`, 'ok')
+      exitSelectMode()
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Delete failed', 'err')
+    } finally {
+      setBulkDeleting(false)
+      setBulkConfirm(false)
+    }
+  }
+
+  // Checkbox UI element
+  function Checkbox({ checked, onChange, indeterminate = false }: { checked: boolean; onChange: () => void; indeterminate?: boolean }) {
+    return (
+      <button
+        onClick={e => { e.stopPropagation(); onChange() }}
+        style={{
+          width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+          border: `2px solid ${checked || indeterminate ? 'var(--color-accent)' : 'var(--color-border)'}`,
+          background: checked ? 'var(--color-accent)' : indeterminate ? 'rgba(245,158,11,.2)' : 'transparent',
+          color: checked ? '#0b0b18' : 'var(--color-accent)',
+          fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', padding: 0, fontFamily: 'var(--font-sans)',
+          transition: 'all .15s',
+        }}
+      >
+        {checked ? '✓' : indeterminate ? '−' : ''}
+      </button>
+    )
+  }
+
+  const btnDanger: React.CSSProperties = {
+    border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14,
+    padding: '11px 20px', background: 'var(--color-expense)', color: '#fff',
+    cursor: 'pointer', fontFamily: 'var(--font-sans)', transition: 'opacity .15s',
+    opacity: bulkDeleting ? 0.6 : 1,
+  }
+  const btnOutline: React.CSSProperties = {
+    border: '1.5px solid var(--color-border)', borderRadius: 10, fontWeight: 600,
+    fontSize: 14, padding: '11px 20px', background: 'var(--color-surface)',
+    color: 'var(--color-text)', cursor: 'pointer', fontFamily: 'var(--font-sans)',
+  }
+
   return (
-    <AppShell title="All Transactions" showFab onFab={() => setAddOpen(true)}>
+    <AppShell title="All Transactions" showFab={!selectMode} onFab={() => setAddOpen(true)}>
       <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* Import / Export */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-ghost" onClick={() => setImportOpen(true)} style={{ flex: 1, padding: 10, fontSize: 13 }}>⬆ Import</button>
-          <button className="btn btn-ghost" onClick={() => setExportOpen(true)} style={{ flex: 1, padding: 10, fontSize: 13 }}>⬇ Export</button>
-        </div>
-
-        {/* Search + filters */}
-        <div>
-          <input type="search" placeholder="🔍  Search…" value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: 10 }} />
-          <FilterPills
-            active={filter}
-            onChange={v => setFilter(v as Filter)}
-            options={[
-              { value: 'all',      label: 'All' },
-              { value: 'expense',  label: '↓ Expense' },
-              { value: 'income',   label: '↑ Income' },
-              { value: 'transfer', label: '→ Transfer' },
-            ]}
-          />
-        </div>
+        {/* Toolbar — switches between normal and select mode */}
+        {!selectMode ? (
+          <>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{ ...btnOutline, flex: 1, padding: '10px 0', fontSize: 13 }} onClick={() => setImportOpen(true)}>⬆ Import</button>
+              <button style={{ ...btnOutline, flex: 1, padding: '10px 0', fontSize: 13 }} onClick={() => setExportOpen(true)}>⬇ Export</button>
+              <button style={{ ...btnOutline, padding: '10px 14px', fontSize: 13, color: 'var(--color-muted)' }} onClick={() => setSelectMode(true)}>☑ Select</button>
+            </div>
+            <div>
+              <input type="search" placeholder="🔍  Search…" value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: 10 }} />
+              <FilterPills active={filter} onChange={v => setFilter(v as Filter)} options={[
+                { value: 'all', label: 'All' }, { value: 'expense', label: '↓ Expense' },
+                { value: 'income', label: '↑ Income' }, { value: 'transfer', label: '→ Transfer' },
+              ]} />
+            </div>
+          </>
+        ) : (
+          /* Select mode toolbar */
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, padding: '10px 14px' }}>
+            <Checkbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} />
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--color-sub)' }}>
+              {selected.size === 0 ? 'Tap to select' : `${selected.size} selected`}
+            </span>
+            <button style={{ ...btnOutline, padding: '7px 14px', fontSize: 13 }} onClick={exitSelectMode}>Cancel</button>
+          </div>
+        )}
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-          <div className="card" style={{ textAlign: 'center', padding: '10px 6px' }}><div style={{ fontSize: 9, color: 'var(--color-income)', fontWeight: 600, marginBottom: 3 }}>↑ IN</div><div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-income)' }}>{fmt(inc)}</div></div>
-          <div className="card" style={{ textAlign: 'center', padding: '10px 6px' }}><div style={{ fontSize: 9, color: 'var(--color-expense)', fontWeight: 600, marginBottom: 3 }}>↓ OUT</div><div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-expense)' }}>{fmt(exp)}</div></div>
-          <div className="card" style={{ textAlign: 'center', padding: '10px 6px' }}><div style={{ fontSize: 9, color: 'var(--color-muted)', fontWeight: 600, marginBottom: 3 }}>COUNT</div><div className="mono" style={{ fontSize: 13, fontWeight: 700 }}>{filtered.length}</div></div>
+          <div className="card" style={{ textAlign: 'center', padding: '10px 6px' }}>
+            <div style={{ fontSize: 9, color: 'var(--color-income)', fontWeight: 600, marginBottom: 3 }}>↑ IN</div>
+            <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-income)' }}>{fmt(inc)}</div>
+          </div>
+          <div className="card" style={{ textAlign: 'center', padding: '10px 6px' }}>
+            <div style={{ fontSize: 9, color: 'var(--color-expense)', fontWeight: 600, marginBottom: 3 }}>↓ OUT</div>
+            <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-expense)' }}>{fmt(exp)}</div>
+          </div>
+          <div className="card" style={{ textAlign: 'center', padding: '10px 6px' }}>
+            <div style={{ fontSize: 9, color: 'var(--color-muted)', fontWeight: 600, marginBottom: 3 }}>COUNT</div>
+            <div className="mono" style={{ fontSize: 13, fontWeight: 700 }}>{filtered.length}</div>
+          </div>
         </div>
 
-        {/* Grouped list */}
+        {/* Transaction list */}
         {filtered.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: 28, color: 'var(--color-muted)' }}><div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>No transactions found</div>
+          <div className="card" style={{ textAlign: 'center', padding: 28, color: 'var(--color-muted)' }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>No transactions found
+          </div>
         ) : (
           <div className="card">
-            {Object.entries(groups).map(([day, gtxs], gi, arr) => {
+            {Object.entries(groups).map(([day, gtxs], gi) => {
               const dInc = gtxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
               const dExp = gtxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+              const dayAllSel = gtxs.every(t => selected.has(t.id))
+              const daySomeSel = gtxs.some(t => selected.has(t.id))
               return (
                 <div key={day}>
                   {gi > 0 && <div className="sep" style={{ margin: '12px 0' }} />}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{day}</span>
+                  {/* Day header — checkbox in select mode */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    {selectMode && (
+                      <Checkbox
+                        checked={dayAllSel}
+                        indeterminate={daySomeSel && !dayAllSel}
+                        onChange={() => {
+                          setSelected(prev => {
+                            const next = new Set(prev)
+                            if (dayAllSel) gtxs.forEach(t => next.delete(t.id))
+                            else gtxs.forEach(t => next.add(t.id))
+                            return next
+                          })
+                        }}
+                      />
+                    )}
+                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{day}</span>
                     <span style={{ fontSize: 11 }}>
                       {dInc > 0 && <span style={{ color: 'var(--color-income)' }}>+{fmt(dInc)}</span>}
                       {dInc > 0 && dExp > 0 && ' · '}
                       {dExp > 0 && <span style={{ color: 'var(--color-expense)' }}>−{fmt(dExp)}</span>}
                     </span>
                   </div>
+                  {/* Rows */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {gtxs.map((t, i) => (
                       <div key={t.id}>
-                        <TxRow tx={t} showAccount />
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                          {selectMode && (
+                            <div style={{ paddingTop: 4, flexShrink: 0 }}>
+                              <Checkbox checked={selected.has(t.id)} onChange={() => toggleSelect(t.id)} />
+                            </div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <TxRow tx={t} showAccount disableExpand={selectMode} onRowClick={selectMode ? () => toggleSelect(t.id) : undefined} />
+                          </div>
+                        </div>
                         {i < gtxs.length - 1 && <div className="sep" style={{ margin: '8px 0' }} />}
                       </div>
                     ))}
@@ -410,7 +532,61 @@ function TransactionsContent() {
             })}
           </div>
         )}
+
+        {/* Bottom padding so floating bar doesn't cover last item */}
+        {selectMode && <div style={{ height: 80 }} />}
       </div>
+
+      {/* Floating bulk action bar */}
+      {selectMode && (
+        <div style={{
+          position: 'fixed',
+          bottom: `calc(64px + env(safe-area-inset-bottom, 0px))`,
+          left: '50%', transform: 'translateX(-50%)',
+          width: '100%', maxWidth: 480,
+          background: 'var(--color-card)',
+          borderTop: '1px solid var(--color-border)',
+          padding: '10px 16px',
+          display: 'flex', alignItems: 'center', gap: 10,
+          zIndex: 80,
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: selected.size > 0 ? 'var(--color-text)' : 'var(--color-muted)' }}>
+              {selected.size === 0 ? 'No selection' : `${selected.size} transaction${selected.size !== 1 ? 's' : ''} selected`}
+            </div>
+            {selected.size > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 2 }}>
+                Tap rows or checkboxes to select
+              </div>
+            )}
+          </div>
+          <button
+            style={{ ...btnDanger, opacity: selected.size === 0 || bulkDeleting ? 0.4 : 1, pointerEvents: selected.size === 0 ? 'none' : 'auto' }}
+            disabled={selected.size === 0 || bulkDeleting}
+            onClick={() => setBulkConfirm(true)}
+          >
+            🗑️ Delete {selected.size > 0 ? selected.size : ''}
+          </button>
+        </div>
+      )}
+
+      {/* Confirm bulk delete */}
+      <Modal open={bulkConfirm} onClose={() => !bulkDeleting && setBulkConfirm(false)}>
+        <h3 className="hd" style={{ fontSize: 18, marginBottom: 10 }}>Delete {selected.size} Transaction{selected.size !== 1 ? 's' : ''}?</h3>
+        <p style={{ color: 'var(--color-sub)', fontSize: 14, marginBottom: 6 }}>
+          This will permanently delete <strong style={{ color: 'var(--color-text)' }}>{selected.size} transaction{selected.size !== 1 ? 's' : ''}</strong>.
+        </p>
+        <p style={{ color: 'var(--color-muted)', fontSize: 13, marginBottom: 20 }}>
+          Account balances will be reversed automatically. This cannot be undone.
+        </p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button style={{ ...btnOutline, flex: 1 }} onClick={() => setBulkConfirm(false)} disabled={bulkDeleting}>Cancel</button>
+          <button style={{ ...btnDanger, flex: 2 }} onClick={handleBulkDelete} disabled={bulkDeleting}>
+            {bulkDeleting ? <><span className="spinner" /> Deleting…</> : `🗑️ Delete ${selected.size}`}
+          </button>
+        </div>
+      </Modal>
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)}>
         <TxForm onDone={() => setAddOpen(false)} />
