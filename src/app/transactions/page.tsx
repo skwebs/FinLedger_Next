@@ -11,6 +11,8 @@ import { fmt, fmtDT, catIcon, buildTxnAt, nowDate, nowTime } from '@/lib/helpers
 import { CATS } from '@/lib/constants'
 import type { TxType, ImportRow } from '@/lib/types'
 
+import FilterPills from '@/components/ui/FilterPills'
+
 type Filter = 'all' | 'expense' | 'income' | 'transfer'
 
 // ─── Export ──────────────────────────────────────
@@ -329,13 +331,16 @@ function TransactionsContent() {
         {/* Search + filters */}
         <div>
           <input type="search" placeholder="🔍  Search…" value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: 10 }} />
-          <div className="pills">
-            {(['all', 'expense', 'income', 'transfer'] as Filter[]).map(f => (
-              <div key={f} className={`pill ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
-                {f === 'all' ? 'All' : f === 'expense' ? '↓ Expense' : f === 'income' ? '↑ Income' : '→ Transfer'}
-              </div>
-            ))}
-          </div>
+          <FilterPills
+            active={filter}
+            onChange={v => setFilter(v as Filter)}
+            options={[
+              { value: 'all',      label: 'All' },
+              { value: 'expense',  label: '↓ Expense' },
+              { value: 'income',   label: '↑ Income' },
+              { value: 'transfer', label: '→ Transfer' },
+            ]}
+          />
         </div>
 
         {/* Stats */}

@@ -2,43 +2,61 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // If env vars missing, skip auth check — don't crash
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.next()
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
       cookies: {
-        getAll() { return request.cookies.getAll() },
+        getAll() {
+          return request.cookies.getAll()
+        },
         setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options as Parameters<typeof supabaseResponse.cookies.set>[2])
           )
         },
       },
+    })
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    // Redirect unauthenticated users to login
+    if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/api')) {
+      return NextResponse.redirect(new URL('/login', request.url))
     }
-  )
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
+    // Redirect authenticated users away from login
+    if (user && pathname === '/login') {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
 
-  // Redirect unauthenticated users to login
-  if (!user && !pathname.startsWith('/login')) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  // Redirect authenticated users away from login
-  if (user && pathname === '/login') {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  } catch {
+    // If auth check fails for any reason, redirect to login for protected routes
+    // rather than returning a 500
+    if (!pathname.startsWith('/login') && !pathname.startsWith('/api')) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
   }
 
   return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icon-.*\\.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }
+
