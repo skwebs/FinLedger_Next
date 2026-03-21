@@ -7,6 +7,7 @@ interface Store {
   accounts: Account[]
   transactions: Transaction[]
   loaded: boolean
+  userId: string | null
   month: string
   // Actions
   loadData: () => Promise<void>
@@ -51,17 +52,21 @@ export const useStore = create<Store>((set, get) => ({
   accounts: [],
   transactions: [],
   loaded: false,
+  userId: null,
   month: new Date().toISOString().slice(0, 7),
 
   setMonth: (m) => set({ month: m }),
 
   loadData: async () => {
     const supabase = db()
+    // Get current user so we can attach user_id to every insert
+    const { data: { user } } = await supabase.auth.getUser()
     const [ar, tr] = await Promise.all([
       supabase.from('accounts').select('*').order('created_at', { ascending: true }),
       supabase.from('transactions').select('*').order('txn_at', { ascending: false }),
     ])
     set({
+      userId: user?.id || null,
       accounts: (ar.data || []) as Account[],
       transactions: (tr.data || []) as Transaction[],
       loaded: true,
@@ -70,7 +75,12 @@ export const useStore = create<Store>((set, get) => ({
 
   addAccount: async (data) => {
     const supabase = db()
-    const { data: rows, error } = await supabase.from('accounts').insert([data]).select()
+    const userId = get().userId
+    if (!userId) throw new Error('Not authenticated')
+    const { data: rows, error } = await supabase
+      .from('accounts')
+      .insert([{ ...data, user_id: userId }])
+      .select()
     if (error) throw error
     const acc = rows[0] as Account
     set(s => ({ accounts: [...s.accounts, acc] }))
@@ -96,7 +106,12 @@ export const useStore = create<Store>((set, get) => ({
 
   addTransaction: async (data) => {
     const supabase = db()
-    const { data: rows, error } = await supabase.from('transactions').insert([data]).select()
+    const userId = get().userId
+    if (!userId) throw new Error('Not authenticated')
+    const { data: rows, error } = await supabase
+      .from('transactions')
+      .insert([{ ...data, user_id: userId }])
+      .select()
     if (error) throw error
     const tx = rows[0] as Transaction
     const updated = await applyBalance(get().accounts, tx, 1)
