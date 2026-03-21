@@ -61,6 +61,10 @@ function ExportModal({ onClose }: { onClose: () => void }) {
   const { toast } = useToast()
   const { exportCSV, exportXLSX } = useExport()
   const [accFilter, setAccFilter] = useState('all')
+
+  const btnPrimary: React.CSSProperties = { display: 'block', width: '100%', border: 'none', borderRadius: 12, fontWeight: 700, fontSize: 15, padding: '13px 20px', background: 'var(--color-accent)', color: '#0b0b18', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'center' }
+  const btnGhost: React.CSSProperties = { display: 'block', width: '100%', border: '1.5px solid var(--color-border)', borderRadius: 12, fontWeight: 700, fontSize: 15, padding: '13px 20px', background: 'var(--color-surface)', color: 'var(--color-text)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'center' }
+
   return (
     <div>
       <h3 className="hd" style={{ fontSize: 18, marginBottom: 14 }}>Export Transactions</h3>
@@ -72,14 +76,14 @@ function ExportModal({ onClose }: { onClose: () => void }) {
         </select>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <button className="btn btn-primary" onClick={() => { exportCSV(accFilter); onClose(); toast('CSV exported', 'ok') }}>📄 Export as CSV</button>
-        <button className="btn btn-ghost" onClick={() => { exportXLSX(accFilter); onClose(); toast('Excel exported', 'ok') }}>📊 Export as Excel</button>
+        <button style={btnPrimary} onClick={() => { exportCSV(accFilter); onClose(); toast('CSV exported', 'ok') }}>📄 Export as CSV</button>
+        <button style={btnGhost} onClick={() => { exportXLSX(accFilter); onClose(); toast('Excel exported', 'ok') }}>📊 Export as Excel</button>
       </div>
       <div style={{ background: 'var(--color-surface)', borderRadius: 10, padding: '11px 13px', fontSize: 12, color: 'var(--color-muted)', marginTop: 14, lineHeight: 1.7 }}>
         Columns: Date · Time · Description · Amount · Type · Category · Account · To Account<br />
         <span style={{ color: 'var(--color-faint)' }}>To Account only filled for Transfer transactions</span>
       </div>
-      <button className="btn btn-ghost" onClick={onClose} style={{ marginTop: 12 }}>Cancel</button>
+      <button style={{ ...btnGhost, marginTop: 12 }} onClick={onClose}>Cancel</button>
     </div>
   )
 }
@@ -198,6 +202,10 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 
   const headers = rawRows[0] || []
 
+  const btnP: React.CSSProperties = { display: 'block', width: '100%', border: 'none', borderRadius: 12, fontWeight: 700, fontSize: 15, padding: '13px 20px', background: 'var(--color-accent)', color: '#0b0b18', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'center' }
+  const btnG: React.CSSProperties = { display: 'block', width: '100%', border: '1.5px solid var(--color-border)', borderRadius: 12, fontWeight: 700, fontSize: 15, padding: '13px 20px', background: 'var(--color-surface)', color: 'var(--color-text)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'center' }
+  const btnSm: React.CSSProperties = { border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 12, padding: '7px 13px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }
+
   return (
     <div>
       <h3 className="hd" style={{ fontSize: 18, marginBottom: 14 }}>Import Transactions</h3>
@@ -215,7 +223,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button style={btnG} onClick={onClose}>Cancel</button>
         </>
       )}
 
@@ -239,8 +247,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
             </select>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-ghost" onClick={() => setStep('pick')} style={{ flex: 1 }}>← Back</button>
-            <button className="btn btn-primary" onClick={doParse} style={{ flex: 2 }}>Preview Rows →</button>
+            <button style={{ ...btnG, flex: 1 }} onClick={() => setStep('pick')}>← Back</button>
+            <button style={{ ...btnP, flex: 2 }} onClick={doParse}>Preview Rows →</button>
           </div>
         </>
       )}
@@ -250,8 +258,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div><span className="slabel" style={{ padding: 0 }}>Selected</span><div className="mono" style={{ fontSize: 18, fontWeight: 700 }}>{parsed.filter(r => r._sel).length}<span style={{ fontSize: 12, color: 'var(--color-muted)' }}>/{parsed.length}</span></div></div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn-sm" onClick={() => setParsed(p => p.map(r => ({ ...r, _sel: true })))} style={{ background: 'rgba(16,185,129,.15)', color: 'var(--color-income)' }}>All</button>
-              <button className="btn-sm" onClick={() => setParsed(p => p.map(r => ({ ...r, _sel: false })))} style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>None</button>
+              <button style={{ ...btnSm, background: 'rgba(16,185,129,.15)', color: 'var(--color-income)' }} onClick={() => setParsed(p => p.map(r => ({ ...r, _sel: true })))}>All</button>
+              <button style={{ ...btnSm, background: 'var(--color-surface)', color: 'var(--color-muted)' }} onClick={() => setParsed(p => p.map(r => ({ ...r, _sel: false })))}>None</button>
             </div>
           </div>
           <div style={{ maxHeight: '45dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
@@ -274,8 +282,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
             })}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-ghost" onClick={() => setStep('map')} style={{ flex: 1 }}>← Back</button>
-            <button className="btn btn-primary" onClick={doSave} disabled={!parsed.some(r => r._sel)} style={{ flex: 2 }}>💾 Import {parsed.filter(r => r._sel).length}</button>
+            <button style={{ ...btnG, flex: 1 }} onClick={() => setStep('map')}>← Back</button>
+            <button style={{ ...btnP, flex: 2, opacity: !parsed.some(r => r._sel) ? 0.4 : 1, pointerEvents: !parsed.some(r => r._sel) ? 'none' : 'auto' }} onClick={doSave}>💾 Import {parsed.filter(r => r._sel).length}</button>
           </div>
         </>
       )}
@@ -285,7 +293,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 300, overflowY: 'auto', marginBottom: 14 }}>
             {logs.length === 0 ? <span className="spinner" /> : logs.map((l, i) => <div key={i} style={{ fontSize: 12, color: 'var(--color-sub)' }}>{l}</div>)}
           </div>
-          {logs.length > 0 && <button className="btn btn-primary" onClick={onClose}>← Back to Transactions</button>}
+          {logs.length > 0 && <button style={btnP} onClick={onClose}>← Back to Transactions</button>}
         </>
       )}
     </div>
