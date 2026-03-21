@@ -44,14 +44,27 @@ function useExport() {
     a.click(); URL.revokeObjectURL(a.href)
   }
   async function exportXLSX(accFilter: string) {
-    const XLSX = (await import('xlsx')).default
-    const { headers, rows } = buildRows(accFilter)
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
-    ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 20 }]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Transactions')
-    const accName = accFilter === 'all' ? 'all' : (accounts.find(a => a.id === accFilter)?.name || 'account').replace(/[^a-z0-9]/gi, '_').toLowerCase()
-    XLSX.writeFile(wb, `finledger_${accName}_${nowDate()}.xlsx`)
+    try {
+      const XLSX = (await import('xlsx')).default
+      const { headers, rows } = buildRows(accFilter)
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+      ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 20 }]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Transactions')
+      // Use write + Blob instead of writeFile — works in browser/Vercel
+      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
+      const accName = accFilter === 'all'
+        ? 'all'
+        : (accounts.find(a => a.id === accFilter)?.name || 'account').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      a.download = `finledger_${accName}_${nowDate()}.xlsx`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (e) {
+      console.error('XLSX export error:', e)
+      throw e
+    }
   }
   return { exportCSV, exportXLSX }
 }
@@ -143,9 +156,13 @@ function ImportModal({ onClose }: { onClose: () => void }) {
     } else if (ext === 'xlsx' || ext === 'xls') {
       const XLSX = (await import('xlsx')).default
       const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf, { type: 'array', cellDates: true })
+      // raw:true — prevents SheetJS mangling numbers/dates; cellDates:false keeps dates as serial numbers so detectDate handles them
+      const wb = XLSX.read(buf, { type: 'array', raw: true, cellDates: false })
       const ws = wb.Sheets[wb.SheetNames[0]]
-      rows = (XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false }) as string[][]).filter(r => r.some(c => String(c).trim()))
+      const rawData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true }) as unknown[][]
+      rows = rawData
+        .filter(r => r.some(c => String(c ?? '').trim()))
+        .map(r => r.map(c => String(c ?? '')))
     } else { toast('Use CSV or XLSX', 'err'); return }
     if (rows.length < 2) { toast('File has no data', 'err'); return }
     setRawRows(rows)
@@ -193,7 +210,10 @@ function ImportModal({ onClose }: { onClose: () => void }) {
       try {
         await addTransaction({ account_id: r.accId, amount: r.amount, type: r.type, category: r.category, description: r.description, txn_at: buildTxnAt(r.date, r.time), to_account_id: null })
         ls.push(`✅ ${r.description} — ${fmt(r.amount)}`); ok++
-      } catch { ls.push(`❌ ${r.description}`); fail++ }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Unknown error'
+        ls.push(`❌ ${r.description}: ${msg.slice(0, 60)}`); fail++
+      }
     }
     ls.push(''); ls.push(`🎉 Done! ${ok} imported${fail ? `, ${fail} failed` : ''}`)
     setLogs(ls)
