@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useStore } from '@/store/useStore'
 import AppShell from '@/components/layout/AppShell'
@@ -19,9 +20,11 @@ function MonthPicker() {
 function AccCard({ acc }: { acc: Account }) {
   const { accounts, transactions, month, deleteAccount } = useStore()
   const { toast } = useToast()
+  const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [addTxOpen, setAddTxOpen] = useState(false)
+  const [viewing, setViewing] = useState(false)
 
   const isCC = acc.type === 'credit_card' && acc.billing_day
   const isPerson = acc.type === 'person'
@@ -108,7 +111,20 @@ function AccCard({ acc }: { acc: Account }) {
         )}
 
         <div style={{ display: 'flex', gap: 7 }}>
-          <Link href={`/accounts/${acc.id}`} style={{ flex: 1, background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, color: 'var(--color-text)', padding: 9, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>View</Link>
+          <button
+            className="edbtn"
+            disabled={viewing}
+            onClick={() => { setViewing(true); router.push(`/accounts/${acc.id}`) }}
+            style={{ flex: 1, opacity: viewing ? 0.7 : 1, minWidth: 0 }}
+          >
+            {viewing
+              ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,.3)', borderTopColor: 'var(--color-text)', borderRadius: '50%', animation: 'spin .6s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+                  Loading
+                </span>
+              : 'View'
+            }
+          </button>
           <button className="edbtn" onClick={() => setEditing(true)}>✏️ Edit</button>
           <button className="btn btn-primary" onClick={() => setAddTxOpen(true)} style={{ flex: 2, borderRadius: 10, padding: 9, fontSize: 13 }}>+ Txn</button>
           <button className="dlbtn" style={{ flex: 'none', padding: '9px 12px' }} onClick={() => setConfirming(true)}>🗑️</button>
