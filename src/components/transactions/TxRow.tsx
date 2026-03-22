@@ -37,6 +37,7 @@ export default function TxRow({ tx, showAccount = true, isPerson = false, disabl
   const rel = isPerson && acc ? getPersonLabels(acc.relationship_type) : null
   const typeLabel = rel && tx.type !== 'transfer'
     ? (tx.type === 'income' ? rel.incomeLbl || 'INCOME' : rel.expenseLbl || 'EXPENSE')
+    : tx.type.toUpperCase()
   const { date, time } = fmtDT(tx.txn_at || tx.created_at)
 
   async function handleDelete() {
