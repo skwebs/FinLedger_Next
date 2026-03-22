@@ -226,14 +226,18 @@ function AccDetailContent({ id }: { id: string }) {
     )
   }
 
-  const isCC   = acc.type === 'credit_card' && acc.billing_day
-  const isPerson = acc.type === 'person'
-  const rel = isPerson ? getPersonLabels(acc.relationship_type) : null
+  // TypeScript doesn't narrow `acc` inside inner function declarations even after
+  // an early return guard — capture it as a typed const so closures see Account, not Account | undefined
+  const account = acc
+
+  const isCC   = account.type === 'credit_card' && account.billing_day
+  const isPerson = account.type === 'person'
+  const rel = isPerson ? getPersonLabels(account.relationship_type) : null
 
   // All transactions for this account (no month filter for non-CC)
   let allTxs = isCC
-    ? ccTxs(acc, transactions, ccOffset)
-    : transactions.filter(t => t.account_id === acc.id).sort((a,b) => new Date(b.txn_at).getTime()-new Date(a.txn_at).getTime())
+    ? ccTxs(account, transactions, ccOffset)
+    : transactions.filter(t => t.account_id === account.id).sort((a,b) => new Date(b.txn_at).getTime()-new Date(a.txn_at).getTime())
 
   // Apply type filter
   if (filter !== 'all') allTxs = allTxs.filter(t => t.type === filter)
@@ -268,18 +272,18 @@ function AccDetailContent({ id }: { id: string }) {
   }
 
   function handleExport() {
-    const csv = buildCSV(transactions.filter(t=>t.account_id===acc.id), acc.name)
-    downloadCSV(csv, `${acc.name.replace(/[^a-z0-9]/gi,'_')}_${nowDate()}.csv`)
+    const csv = buildCSV(transactions.filter(t=>t.account_id===account.id), account.name)
+    downloadCSV(csv, `${account.name.replace(/[^a-z0-9]/gi,'_')}_${nowDate()}.csv`)
     toast('Exported CSV', 'ok')
   }
 
   const balColor = isPerson
-    ? (acc.balance>0?'var(--color-person)':acc.balance<0?'var(--color-expense)':'var(--color-muted)')
-    : (acc.balance<0?'var(--color-expense)':'var(--color-accent)')
+    ? (account.balance>0?'var(--color-person)':account.balance<0?'var(--color-expense)':'var(--color-muted)')
+    : (account.balance<0?'var(--color-expense)':'var(--color-accent)')
   const balStr = isPerson
-    ? `${acc.balance>0?'+':acc.balance<0?'−':''}${fmt(Math.abs(acc.balance))}`
-    : fmt(acc.balance)
-  const balSub = isPerson && rel ? rel.balanceLbl(acc.balance) : 'Balance'
+    ? `${account.balance>0?'+':account.balance<0?'−':''}${fmt(Math.abs(account.balance))}`
+    : fmt(account.balance)
+  const balSub = isPerson && rel ? rel.balanceLbl(account.balance) : 'Balance'
 
   const btnDanger: React.CSSProperties = { border:'none', borderRadius:10, fontWeight:700, fontSize:14, padding:'11px 20px', background:'var(--color-expense)', color:'#fff', cursor:'pointer', fontFamily:'var(--font-sans)', opacity:bulkDeleting?0.6:1 }
   const btnOut: React.CSSProperties = { border:'1.5px solid var(--color-border)', borderRadius:10, fontWeight:600, fontSize:14, padding:'11px 20px', background:'var(--color-surface)', color:'var(--color-text)', cursor:'pointer', fontFamily:'var(--font-sans)' }
@@ -296,7 +300,7 @@ function AccDetailContent({ id }: { id: string }) {
   })
 
   return (
-    <AppShell title={acc.name} showBack backHref="/accounts" showFab onFab={() => setAddOpen(true)}
+    <AppShell title={account.name} showBack backHref="/accounts" showFab onFab={() => setAddOpen(true)}
       onImport={() => setImportOpen(true)} onExport={handleExport}
       headerRight={
         <div style={{ display:'flex', gap:6, alignItems:'center' }}>
@@ -311,11 +315,11 @@ function AccDetailContent({ id }: { id: string }) {
       <div className="fade-up" style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
         {/* Header card */}
-        <div className="card" style={{ borderLeft:`3px solid ${acc.color}` }}>
+        <div className="card" style={{ borderLeft:`3px solid ${account.color}` }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
             <div>
-              <div className="hd" style={{ fontSize:18, fontWeight:800 }}>{acc.name}</div>
-              <div style={{ fontSize:12, color:'var(--color-muted)' }}>{acc.type.replace('_',' ').toUpperCase()}</div>
+              <div className="hd" style={{ fontSize:18, fontWeight:800 }}>{account.name}</div>
+              <div style={{ fontSize:12, color:'var(--color-muted)' }}>{account.type.replace('_',' ').toUpperCase()}</div>
               {rel && <div style={{ fontSize:11, color:'var(--color-person)', marginTop:3 }}>{rel.l}</div>}
             </div>
             <div style={{ textAlign:'right' }}>
@@ -324,21 +328,21 @@ function AccDetailContent({ id }: { id: string }) {
             </div>
           </div>
 
-          {isCC && acc.credit_limit && (() => {
-            const usage = Math.min(100, exp/acc.credit_limit*100)
+          {isCC && account.credit_limit && (() => {
+            const usage = Math.min(100, exp/account.credit_limit*100)
             const bc = usage>80?'var(--color-expense)':usage>50?'var(--color-warning)':'var(--color-income)'
-            const dl = daysLeft(acc.billing_day!)
-            const {start,end} = getCCCycle(acc.billing_day!,ccOffset)
+            const dl = daysLeft(account.billing_day!)
+            const {start,end} = getCCCycle(account.billing_day!,ccOffset)
             return (
               <div style={{ marginBottom:12 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4, fontSize:11, color:'var(--color-muted)' }}>
                   <span>{fmtShort(start)} – {fmtShort(end)}</span>
-                  <span>Due day {acc.billing_day} · {dl}d left</span>
+                  <span>Due day {account.billing_day} · {dl}d left</span>
                 </div>
                 <div style={{ height:6, background:'var(--color-surface)', borderRadius:3, overflow:'hidden', marginBottom:4 }}>
                   <div style={{ width:`${usage}%`, height:'100%', background:bc, borderRadius:3 }} />
                 </div>
-                <div style={{ fontSize:11, color:'var(--color-muted)' }}>{usage.toFixed(0)}% · {fmt(exp)} of {fmt(acc.credit_limit)}</div>
+                <div style={{ fontSize:11, color:'var(--color-muted)' }}>{usage.toFixed(0)}% · {fmt(exp)} of {fmt(account.credit_limit)}</div>
               </div>
             )
           })()}
@@ -440,9 +444,9 @@ function AccDetailContent({ id }: { id: string }) {
         </div>
       )}
 
-      <Modal open={addOpen} onClose={()=>setAddOpen(false)}><TxForm preAccId={acc.id} onDone={()=>setAddOpen(false)} /></Modal>
-      <Modal open={editOpen} onClose={()=>setEditOpen(false)}><AccForm acc={acc} onDone={()=>setEditOpen(false)} /></Modal>
-      <Modal open={importOpen} onClose={()=>setImportOpen(false)}><ImportModal accId={acc.id} onClose={()=>setImportOpen(false)} /></Modal>
+      <Modal open={addOpen} onClose={()=>setAddOpen(false)}><TxForm preAccId={account.id} onDone={()=>setAddOpen(false)} /></Modal>
+      <Modal open={editOpen} onClose={()=>setEditOpen(false)}><AccForm acc={account} onDone={()=>setEditOpen(false)} /></Modal>
+      <Modal open={importOpen} onClose={()=>setImportOpen(false)}><ImportModal accId={account.id} onClose={()=>setImportOpen(false)} /></Modal>
     </AppShell>
   )
 }
