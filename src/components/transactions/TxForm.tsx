@@ -21,26 +21,59 @@ export default function TxForm({ tx, preAccId, onDone }: { tx?: Transaction | nu
   const [time, setTime] = useState(tx ? new Date(tx.txn_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : nowTime())
   const [loading, setLoading] = useState(false)
 
+  function handleAccChange(newAccId: string) {
+    setAccId(newAccId)
+    if (!isEdit) {
+      // Reset type to smart default for the new account
+      const newAcc = accounts.find(a => a.id === newAccId)
+      if (newAcc?.type === 'person') {
+        const r = newAcc.relationship_type
+        setType(r === 'receive_from' ? 'income' : 'expense')
+      } else {
+        setType('expense')
+      }
+    }
+  }
+
   const acc = accounts.find(a => a.id === accId)
   const isPerson = acc?.type === 'person'
   const rel = isPerson ? getPersonLabels(acc?.relationship_type) : null
+  const relType = acc?.relationship_type
 
-  // Hide income side for pay_to, hide expense for receive_from
-  const showIncome  = !isPerson || acc?.relationship_type !== 'pay_to'
-  const showExpense = !isPerson || acc?.relationship_type !== 'receive_from'
+  // Default type based on relationship — but never hide any direction
+  // receive_from → default to income (received), but expense = refund is still available
+  // pay_to → default to expense (paid), but income = reversal is still available
+  const defaultType: TxType = !isPerson
+    ? 'expense'
+    : relType === 'receive_from' ? 'income'
+    : relType === 'pay_to' ? 'expense'
+    : 'expense'
 
+  // Smart labels — primary direction gets the main label, rare direction gets a descriptive label
   const typeLabels: Record<TxType, string> = {
-    expense:  rel ? rel.expenseLbl || '↓ Paid' : '↓ Expense',
-    income:   rel ? rel.incomeLbl  || '↑ Received' : '↑ Income',
+    expense: !isPerson ? '↓ Expense'
+      : relType === 'pay_to'       ? (rel?.expenseLbl || '↓ Paid')
+      : relType === 'receive_from' ? '↩️ Refund'
+      : relType === 'general'      ? (rel?.expenseLbl || '↓ Paid')
+      : (rel?.expenseLbl || '✅ Received back'),
+
+    income: !isPerson ? '↑ Income'
+      : relType === 'receive_from' ? (rel?.incomeLbl || '↑ Received')
+      : relType === 'pay_to'       ? '↩️ Reversal'
+      : relType === 'general'      ? (rel?.incomeLbl || '↑ Received')
+      : (rel?.incomeLbl || '💸 Lent'),
+
     transfer: '→ Transfer',
   }
+
   const typeColors: Record<TxType, string> = {
     expense: 'var(--color-expense)', income: 'var(--color-income)', transfer: 'var(--color-transfer)',
   }
 
   const activeCats = categories.filter(c => c.active)
 
-  async function handleSubmit() {
+  // All three types always available — no hiding
+  const availableTypes: TxType[] = ['expense', 'income', 'transfer']
     const amt = parseFloat(amount)
     if (!amt || amt <= 0) { toast('Enter valid amount', 'err'); return }
     if (!accId) { toast('Select account', 'err'); return }
@@ -94,7 +127,7 @@ export default function TxForm({ tx, preAccId, onDone }: { tx?: Transaction | nu
 
         <div>
           <label>From Account</label>
-          <select value={accId} onChange={e => setAccId(e.target.value)}>
+          <select value={accId} onChange={e => handleAccChange(e.target.value)}>
             {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.type.replace('_', ' ')})</option>)}
           </select>
         </div>
@@ -130,9 +163,11 @@ export default function TxForm({ tx, preAccId, onDone }: { tx?: Transaction | nu
 
         {isPerson && rel && (
           <div style={{ background: 'rgba(167,139,250,.08)', border: '1px solid rgba(167,139,250,.2)', borderRadius: 9, padding: '10px 12px', fontSize: 12, color: 'var(--color-sub)' }}>
-            {rel.desc}<br />
-            {showIncome && <><span style={{ color: 'var(--color-person)' }}>↑ </span>{rel.incomeLbl} · </>}
-            {showExpense && <><span style={{ color: 'var(--color-expense)' }}>↓ </span>{rel.expenseLbl}</>}
+            <span style={{ color: 'var(--color-person)', fontWeight: 700 }}>{rel.l}</span> — {rel.desc}<br />
+            {rel.incomeLbl && <><span style={{ color: 'var(--color-income)' }}>↑ {rel.incomeLbl}</span><br /></>}
+            {rel.expenseLbl && <><span style={{ color: 'var(--color-expense)' }}>↓ {rel.expenseLbl}</span><br /></>}
+            {relType === 'receive_from' && <span style={{ color: 'var(--color-muted)' }}>↩️ Refund = money you return back</span>}
+            {relType === 'pay_to' && <span style={{ color: 'var(--color-muted)' }}>↩️ Reversal = payment returned to you</span>}
           </div>
         )}
 

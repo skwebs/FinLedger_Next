@@ -72,34 +72,34 @@ export const RELATIONSHIP_TYPES: {
   {
     v: 'lend_borrow',
     l: '💸 Lend / Borrow',
-    desc: 'Friend, family — give and take money',
-    incomeLbl:  '💸 Lent to them',
-    expenseLbl: '✅ Received back',
+    desc: 'Friend, family — money flows both ways over time',
+    incomeLbl:  '💳 Credit',
+    expenseLbl: '💳 Debit',
     balanceLbl: b => b > 0 ? 'They owe you' : b < 0 ? 'You owe them' : 'Settled',
   },
   {
     v: 'pay_to',
     l: '💼 Pay To',
-    desc: 'Employee salary, vendor, contractor',
-    incomeLbl:  '',           // not used — paying only
+    desc: 'Employee salary, vendor, contractor — you pay them',
+    incomeLbl:  '↩️ Reversal',
     expenseLbl: '💼 Paid',
     balanceLbl: b => `₹${Math.abs(b).toLocaleString('en-IN')} total paid`,
   },
   {
     v: 'receive_from',
     l: '🎓 Receive From',
-    desc: 'Tuition fee, rent collected, client payment',
+    desc: 'Tuition fee, rent collected — they pay you',
     incomeLbl:  '🎓 Received',
-    expenseLbl: '↩️ Refunded',   // rare
+    expenseLbl: '📋 Due',
     balanceLbl: b => `₹${Math.abs(b).toLocaleString('en-IN')} total received`,
   },
   {
     v: 'general',
     l: '🔄 General',
-    desc: 'Flexible — mixed payments in both directions',
-    incomeLbl:  '↑ Received',
-    expenseLbl: '↓ Paid',
-    balanceLbl: b => b > 0 ? 'Net owed to you' : b < 0 ? 'Net you owe' : 'Settled',
+    desc: 'Flexible — mixed in both directions',
+    incomeLbl:  '💳 Credit',
+    expenseLbl: '💳 Debit',
+    balanceLbl: b => b > 0 ? 'Net credit to you' : b < 0 ? 'Net debit from you' : 'Settled',
   },
 ]
 

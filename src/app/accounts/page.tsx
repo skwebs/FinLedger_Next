@@ -61,9 +61,24 @@ function AccCard({ acc }: { acc: Account }) {
       }
 
       const link = `${window.location.origin}/share/${token}`
-      await navigator.clipboard.writeText(link)
-      toast('Link copied! Share via WhatsApp, SMS or any app.', 'ok')
+      const shareData = {
+        title: `${acc.name} — Statement`,
+        text: `View ${acc.name}'s statement on FinLedger`,
+        url: link,
+      }
+
+      // Use native share sheet if available (Android, iOS, modern desktop)
+      // Falls back to clipboard copy on unsupported browsers
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData)
+        // No toast needed — native share sheet gives its own confirmation
+      } else {
+        await navigator.clipboard.writeText(link)
+        toast('Link copied! Paste in WhatsApp, SMS or any app.', 'ok')
+      }
     } catch (e: unknown) {
+      // AbortError = user cancelled the share sheet — not an error
+      if (e instanceof Error && e.name === 'AbortError') return
       toast(e instanceof Error ? e.message : 'Failed to generate link', 'err')
     } finally {
       setSharing(false)

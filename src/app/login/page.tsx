@@ -39,8 +39,8 @@ export default function LoginPage() {
       if (error) {
         const msg = error.message || ''
         if (msg.toLowerCase().includes('email not confirmed') || msg.toLowerCase().includes('not verified')) {
-          setErr('Email not confirmed. Disable "Enable email confirmations" in Supabase → Authentication → Settings.')
-        } else if (msg.toLowerCase().includes('invalid')) {
+          setErr('Your account email was not confirmed. Fix: Go to Supabase → SQL Editor and run:\n\nupdate auth.users set email_confirmed_at = now() where email = \'' + email + '\';')
+        } else if (msg.toLowerCase().includes('invalid login') || msg.toLowerCase().includes('invalid credentials')) {
           setErr('Wrong email or password.')
         } else {
           setErr(msg)

@@ -79,11 +79,21 @@ function mapRows(rows: string[][], accId: string): ImportRow[] {
 }
 
 // ─── Export helper ────────────────────────────────────
-function buildCSV(txs: Transaction[], accName: string): string {
-  const headers = ['Date','Time','Description','Amount','Type','Category']
+function buildCSV(txs: Transaction[], accName: string, allAccounts: { id: string; name: string }[]): string {
+  const headers = ['Date','Time','Description','Amount','Type','Category','Account','To Account']
   const rows = txs.map(t => {
     const dt = new Date(t.txn_at||t.created_at)
-    return [dt.toISOString().slice(0,10), dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false}), t.description||'', t.amount, t.type, t.category||'Other']
+    const toAcc = t.to_account_id ? allAccounts.find(a => a.id === t.to_account_id)?.name || '' : ''
+    return [
+      dt.toISOString().slice(0,10),
+      dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false}),
+      t.description||'',
+      t.amount,
+      t.type,
+      t.category||'Other',
+      accName,
+      toAcc,
+    ]
   })
   return [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n')
 }
@@ -111,11 +121,24 @@ function Checkbox({ checked, indeterminate=false, onChange }: { checked:boolean;
 }
 
 // ─── Import modal ─────────────────────────────────────
+const COL_KEYS = {
+  date:     ['date','txn_date','transaction_date','value_date','posting_date','tran_date','dt'],
+  time:     ['time','txn_time','transaction_time'],
+  desc:     ['description','desc','narration','particulars','remarks','merchant','payee'],
+  amount:   ['amount','amt','inr','rs'],
+  debit:    ['debit','dr','debit_amount','withdrawal'],
+  credit:   ['credit','cr','credit_amount','deposit'],
+  type:     ['type','txn_type','transaction_type'],
+  category: ['category','cat','tag'],
+}
+
 function ImportModal({ accId, onClose }: { accId: string; onClose: () => void }) {
   const { addTransaction } = useStore()
   const { toast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [step, setStep] = useState<'pick'|'review'|'saving'>('pick')
+  const [step, setStep] = useState<'pick'|'map'|'review'|'saving'>('pick')
+  const [rawRows, setRawRows] = useState<string[][]>([])
+  const [mapped, setMapped] = useState<Record<string, number>>({})
   const [parsed, setParsed] = useState<ImportRow[]>([])
   const [logs, setLogs] = useState<string[]>([])
 
@@ -126,7 +149,54 @@ function ImportModal({ accId, onClose }: { accId: string; onClose: () => void })
     const text = await file.text()
     const rows = parseCSVRows(text)
     if (rows.length < 2) { toast('No data rows found', 'err'); return }
-    setParsed(mapRows(rows, accId))
+    setRawRows(rows)
+    // Auto-detect columns
+    const headers = rows[0].map(h => h.toLowerCase().trim().replace(/\s+/g,'_'))
+    // Strict matching: exact match, or header contains key as a complete word segment
+    // Avoids false positives like 'cr' matching 'description', 'dr' matching 'address' etc.
+    const find = (keys: string[]) => {
+      for (const k of keys) {
+        // 1. Exact match
+        let i = headers.findIndex(h => h === k)
+        if (i >= 0) return i
+        // 2. Header starts with key followed by _ or end (e.g. 'debit_amount' matches 'debit')
+        i = headers.findIndex(h => h.startsWith(k + '_') || h.endsWith('_' + k))
+        if (i >= 0) return i
+        // 3. Key contains header (header is a prefix of key — e.g. header 'amt' matches key 'amount')
+        i = headers.findIndex(h => h.length > 2 && k.startsWith(h))
+        if (i >= 0) return i
+      }
+      return -1
+    }
+    const m: Record<string, number> = {}
+    Object.entries(COL_KEYS).forEach(([key, vals]) => { m[key] = find(vals) })
+    setMapped(m)
+    setStep('map')
+  }
+
+  function doParse() {
+    const m = mapped
+    const data = rawRows.slice(1).filter(r=>r.some(c=>c.trim())).map((row,i) => {
+      const getAmt = (col:number) => Math.abs(parseFloat(String(row[col]||'').replace(/[^0-9.-]/g,''))||0)
+      let amount=0; let type: TxType='expense'
+      if (m.debit>=0||m.credit>=0) {
+        const d=m.debit>=0?getAmt(m.debit):0; const cr=m.credit>=0?getAmt(m.credit):0
+        amount=d>0?d:cr; type=d>0?'expense':'income'
+      } else if (m.amount>=0) { amount=getAmt(m.amount) }
+      if (m.type>=0) {
+        const tv=String(row[m.type]||'').toLowerCase()
+        if (tv.includes('income')||tv.includes('credit')) type='income'
+        else if (tv.includes('expense')||tv.includes('debit')) type='expense'
+        else if (tv.includes('transfer')) type='transfer'
+        else if (['expense','income','transfer'].includes(tv)) type=tv as TxType
+      }
+      const date = m.date>=0 ? detectDate(String(row[m.date]||'')) : nowDate()
+      const time = m.time>=0 ? String(row[m.time]||'12:00').slice(0,5) : '12:00'
+      const desc = m.desc>=0 ? String(row[m.desc]||'').trim() : 'Transaction'
+      const cat  = m.category>=0 && CATS.includes(String(row[m.category])) ? String(row[m.category]) : 'Other'
+      return { _id:'i'+i, _sel:amount>0, description:desc||'Transaction', amount, type, category:cat, date, time, accId }
+    }).filter(r=>r.amount>0)
+    setParsed(data)
     setStep('review')
   }
 
@@ -144,25 +214,54 @@ function ImportModal({ accId, onClose }: { accId: string; onClose: () => void })
     setLogs(ls); toast(`Imported ${ok}${fail?`, ${fail} failed`:''}`,ok>0?'ok':'err')
   }
 
+  const headers = rawRows[0] || []
+
   return (
     <div>
       <h3 className="hd" style={{ fontSize:18, marginBottom:14 }}>Import to This Account</h3>
+
       {step==='pick' && (
         <>
           <label htmlFor="imp-file2" style={{ display:'block', border:'2px dashed var(--color-border)', borderRadius:14, padding:'28px 16px', textAlign:'center', cursor:'pointer', marginBottom:14 }}>
             <div style={{ fontSize:32, marginBottom:8 }}>📁</div>
             <div style={{ fontSize:14, fontWeight:600 }}>Tap to choose CSV file</div>
-            <div style={{ fontSize:12, color:'var(--color-muted)', marginTop:4 }}>All transactions will be imported to this account</div>
+            <div style={{ fontSize:12, color:'var(--color-muted)', marginTop:4 }}>Supports exported FinLedger CSV and bank statement CSV</div>
           </label>
           <input id="imp-file2" type="file" accept=".csv" style={{ display:'none' }} ref={fileRef} onChange={e=>e.target.files?.[0]&&handleFile(e.target.files[0])} />
           <button style={btnG} onClick={onClose}>Cancel</button>
         </>
       )}
+
+      {step==='map' && (
+        <>
+          <p style={{ color:'var(--color-sub)', fontSize:13, marginBottom:14 }}>{rawRows.length-1} row(s) found. Verify column mapping.</p>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+            {Object.entries(COL_KEYS).map(([key]) => (
+              <div key={key}>
+                <label>{key}</label>
+                <select value={mapped[key]??-1} onChange={e=>setMapped(p=>({...p,[key]:parseInt(e.target.value)}))} style={{ padding:'8px 10px', fontSize:12 }}>
+                  <option value={-1}>— none —</option>
+                  {headers.map((h,i) => <option key={i} value={i}>{h||'col_'+i}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div style={{ display:'flex', gap:10 }}>
+            <button style={{ ...btnG, flex:1 }} onClick={()=>setStep('pick')}>← Back</button>
+            <button style={{ ...btnP, flex:2 }} onClick={doParse}>Preview Rows →</button>
+          </div>
+        </>
+      )}
+
       {step==='review' && (
         <>
-          <p style={{ color:'var(--color-sub)', fontSize:13, marginBottom:12 }}>
-            {parsed.filter(r=>r._sel).length} of {parsed.length} rows selected
-          </p>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+            <p style={{ color:'var(--color-sub)', fontSize:13, margin:0 }}>{parsed.filter(r=>r._sel).length} of {parsed.length} selected</p>
+            <div style={{ display:'flex', gap:6 }}>
+              <button onClick={()=>setParsed(p=>p.map(r=>({...r,_sel:true})))} style={{ background:'rgba(16,185,129,.15)', color:'var(--color-income)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'var(--font-sans)' }}>All</button>
+              <button onClick={()=>setParsed(p=>p.map(r=>({...r,_sel:false})))} style={{ background:'var(--color-surface)', color:'var(--color-muted)', border:'1px solid var(--color-border)', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'var(--font-sans)' }}>None</button>
+            </div>
+          </div>
           <div style={{ maxHeight:'45dvh', overflowY:'auto', display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
             {parsed.map((r,idx) => {
               const col = r.type==='income'?'var(--color-income)':r.type==='transfer'?'var(--color-transfer)':'var(--color-expense)'
@@ -183,11 +282,12 @@ function ImportModal({ accId, onClose }: { accId: string; onClose: () => void })
             })}
           </div>
           <div style={{ display:'flex', gap:10 }}>
-            <button style={{ ...btnG, flex:1 }} onClick={()=>setStep('pick')}>← Back</button>
+            <button style={{ ...btnG, flex:1 }} onClick={()=>setStep('map')}>← Back</button>
             <button style={{ ...btnP, flex:2, opacity:!parsed.some(r=>r._sel)?0.4:1, pointerEvents:!parsed.some(r=>r._sel)?'none':'auto' }} onClick={doSave}>💾 Import {parsed.filter(r=>r._sel).length}</button>
           </div>
         </>
       )}
+
       {step==='saving' && (
         <>
           <div style={{ display:'flex', flexDirection:'column', gap:4, maxHeight:300, overflowY:'auto', marginBottom:14 }}>
@@ -272,7 +372,7 @@ function AccDetailContent({ id }: { id: string }) {
   }
 
   function handleExport() {
-    const csv = buildCSV(transactions.filter(t=>t.account_id===account.id), account.name)
+    const csv = buildCSV(transactions.filter(t=>t.account_id===account.id), account.name, accounts)
     downloadCSV(csv, `${account.name.replace(/[^a-z0-9]/gi,'_')}_${nowDate()}.csv`)
     toast('Exported CSV', 'ok')
   }

@@ -167,7 +167,17 @@ function ImportModal({ onClose }: { onClose: () => void }) {
     if (rows.length < 2) { toast('File has no data', 'err'); return }
     setRawRows(rows)
     const headers = rows[0].map(h => String(h).toLowerCase().trim().replace(/\s+/g, '_'))
-    const find = (keys: string[]) => { for (const k of keys) { const i = headers.findIndex(h => k === h || h.includes(k) || k.includes(h)); if (i >= 0) return i } return -1 }
+    const find = (keys: string[]) => {
+      for (const k of keys) {
+        let i = headers.findIndex(h => h === k)
+        if (i >= 0) return i
+        i = headers.findIndex(h => h.startsWith(k + '_') || h.endsWith('_' + k))
+        if (i >= 0) return i
+        i = headers.findIndex(h => h.length > 2 && k.startsWith(h))
+        if (i >= 0) return i
+      }
+      return -1
+    }
     const m: Record<string, number> = {}
     Object.entries(COL_KEYS).forEach(([key, vals]) => { m[key] = find(vals) })
     setMapped(m)
