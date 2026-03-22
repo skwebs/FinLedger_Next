@@ -1,6 +1,8 @@
 'use client'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import Sidebar from './Sidebar'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'HOME', icon: (
@@ -11,8 +13,7 @@ const NAV_ITEMS = [
   )},
   { href: '/accounts', label: 'ACCOUNTS', icon: (
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} width={20} height={20}>
-      <rect x="2" y="5" width="20" height="14" rx="2"/>
-      <line x1="2" y1="10" x2="22" y2="10"/>
+      <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
     </svg>
   )},
   { href: '/transactions', label: 'ALL TXNS', icon: (
@@ -28,8 +29,7 @@ const NAV_ITEMS = [
   )},
   { href: '/bot', label: 'BOT', icon: (
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} width={20} height={20}>
-      <rect x="2" y="4" width="20" height="16" rx="2"/>
-      <polyline points="2,4 12,13 22,4"/>
+      <rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/>
     </svg>
   )},
 ]
@@ -42,13 +42,17 @@ interface AppShellProps {
   headerRight?: React.ReactNode
   showFab?: boolean
   onFab?: () => void
+  // sidebar passthrough
+  onImport?: () => void
+  onExport?: () => void
 }
 
 export default function AppShell({
   children, title, showBack, backHref = '/accounts',
-  headerRight, showFab = true, onFab,
+  headerRight, showFab = true, onFab, onImport, onExport,
 }: AppShellProps) {
   const pathname = usePathname()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
     <>
@@ -61,6 +65,15 @@ export default function AppShell({
         justifyContent: 'space-between', gap: 8, minHeight: 54,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          {/* Hamburger */}
+          <button onClick={() => setSidebarOpen(true)} style={{
+            background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+            borderRadius: 10, width: 34, height: 34, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', flexShrink: 0,
+          }}>
+            {[0,1,2].map(i => <span key={i} style={{ width: 16, height: 1.5, background: 'var(--color-text)', borderRadius: 1 }} />)}
+          </button>
+
           {showBack && (
             <Link href={backHref} style={{
               background: 'var(--color-surface)', border: '1px solid var(--color-border)',
@@ -119,6 +132,14 @@ export default function AppShell({
           )
         })}
       </nav>
+
+      {/* Sidebar drawer */}
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onImport={onImport}
+        onExport={onExport}
+      />
     </>
   )
 }

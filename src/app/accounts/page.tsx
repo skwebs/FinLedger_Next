@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useStore } from '@/store/useStore'
@@ -9,7 +9,7 @@ import { ToastProvider, useToast } from '@/components/ui/Toast'
 import Modal from '@/components/ui/Modal'
 import AccForm from '@/components/accounts/AccForm'
 import { fmt, monthTxs, ccTxs, daysLeft } from '@/lib/helpers'
-import { ACC_TYPES, GROUP_ORDER } from '@/lib/constants'
+import { ACC_TYPES, GROUP_ORDER, getPersonLabels } from '@/lib/constants'
 import type { Account, AccountType } from '@/lib/types'
 
 function MonthPicker() {
@@ -25,23 +25,66 @@ function AccCard({ acc }: { acc: Account }) {
   const [confirming, setConfirming] = useState(false)
   const [addTxOpen, setAddTxOpen] = useState(false)
   const [viewing, setViewing] = useState(false)
+  const [sharing, setSharing] = useState(false)
 
   const isCC = acc.type === 'credit_card' && acc.billing_day
+  async function shareStatement() {
+    setSharing(true)
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Check if a token already exists for this account
+      const { data: existing, error: checkErr } = await supabase
+        .from('share_tokens')
+        .select('token')
+        .eq('account_id', acc.id)
+        .maybeSingle()
+
+      // If table doesn't exist yet — guide the user
+      if (checkErr?.message?.includes('does not exist') || checkErr?.code === '42P01') {
+        toast('Run share_tokens_migration.sql in Supabase SQL Editor first — see README', 'err')
+        setSharing(false); return
+      }
+
+      let token = existing?.token
+      if (!token) {
+        const { data: created, error: createErr } = await supabase
+          .from('share_tokens')
+          .insert([{ account_id: acc.id, user_id: user.id, label: acc.name }])
+          .select('token')
+          .single()
+        if (createErr) throw createErr
+        token = created.token
+      }
+
+      const link = `${window.location.origin}/share/${token}`
+      await navigator.clipboard.writeText(link)
+      toast('Link copied! Share via WhatsApp, SMS or any app.', 'ok')
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Failed to generate link', 'err')
+    } finally {
+      setSharing(false)
+    }
+  }
+
   const isPerson = acc.type === 'person'
+  const rel = isPerson ? getPersonLabels(acc.relationship_type) : null
   const mTxs = monthTxs(transactions, month).filter(t => t.account_id === acc.id)
   const mInc = mTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const mExp = mTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
 
   let balDisplay
-  if (isPerson) {
-    const isOwed = acc.balance > 0
+  if (isPerson && rel) {
     balDisplay = (
       <div style={{ textAlign: 'right' }}>
-        <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: isOwed ? 'var(--color-person)' : acc.balance < 0 ? 'var(--color-expense)' : 'var(--color-muted)' }}>
-          {isOwed ? '+' : acc.balance < 0 ? '−' : ''}{fmt(Math.abs(acc.balance))}
+        <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: acc.balance > 0 ? 'var(--color-person)' : acc.balance < 0 ? 'var(--color-expense)' : 'var(--color-muted)' }}>
+          {acc.balance > 0 ? '+' : acc.balance < 0 ? '−' : ''}{fmt(Math.abs(acc.balance))}
         </div>
-        <div style={{ fontSize: 11, color: isOwed ? 'var(--color-person)' : acc.balance < 0 ? 'var(--color-expense)' : 'var(--color-muted)' }}>
-          {isOwed ? 'They owe you' : acc.balance < 0 ? 'You owe them' : 'Settled'}
+        <div style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+          {rel.balanceLbl(acc.balance)}
         </div>
       </div>
     )
@@ -126,6 +169,15 @@ function AccCard({ acc }: { acc: Account }) {
             }
           </button>
           <button className="edbtn" onClick={() => setEditing(true)}>✏️ Edit</button>
+          {isPerson && (
+            <button
+              onClick={shareStatement}
+              disabled={sharing}
+              style={{ flex: 1, background: 'rgba(167,139,250,.12)', border: '1px solid rgba(167,139,250,.3)', borderRadius: 10, color: 'var(--color-person)', padding: 9, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer', opacity: sharing ? 0.6 : 1 }}
+            >
+              {sharing ? '…' : '🔗 Share'}
+            </button>
+          )}
           <button className="btn btn-primary" onClick={() => setAddTxOpen(true)} style={{ flex: 2, borderRadius: 10, padding: 9, fontSize: 13 }}>+ Txn</button>
           <button className="dlbtn" style={{ flex: 'none', padding: '9px 12px' }} onClick={() => setConfirming(true)}>🗑️</button>
         </div>

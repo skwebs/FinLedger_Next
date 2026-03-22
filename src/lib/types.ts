@@ -1,5 +1,7 @@
 export type AccountType = 'bank' | 'credit_card' | 'savings' | 'cash' | 'investment' | 'person'
 
+export type PersonRelationship = 'lend_borrow' | 'pay_to' | 'receive_from' | 'general'
+
 export interface Account {
   id: string
   user_id: string
@@ -10,6 +12,7 @@ export interface Account {
   billing_day: number | null
   credit_limit: number | null
   color: string
+  relationship_type: PersonRelationship | null
   created_at: string
 }
 
@@ -28,6 +31,14 @@ export interface Transaction {
   created_at: string
 }
 
+export interface Category {
+  id: string
+  name: string
+  emoji: string
+  active: boolean
+  isDefault: boolean
+}
+
 export interface AccountFormData {
   name: string
   type: AccountType
@@ -36,6 +47,7 @@ export interface AccountFormData {
   billing_day: number | null
   credit_limit: number | null
   color: string
+  relationship_type: PersonRelationship | null
 }
 
 export interface TxFormData {

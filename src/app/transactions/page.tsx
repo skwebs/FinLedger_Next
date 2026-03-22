@@ -425,16 +425,15 @@ function TransactionsContent() {
   }
 
   return (
-    <AppShell title="All Transactions" showFab={!selectMode} onFab={() => setAddOpen(true)}>
+    <AppShell title="All Transactions" showFab={!selectMode} onFab={() => setAddOpen(true)}
+      onImport={() => setImportOpen(true)} onExport={() => setExportOpen(true)}>
       <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* Toolbar — switches between normal and select mode */}
+        {/* Toolbar */}
         {!selectMode ? (
           <>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button style={{ ...btnOutline, flex: 1, padding: '10px 0', fontSize: 13 }} onClick={() => setImportOpen(true)}>⬆ Import</button>
-              <button style={{ ...btnOutline, flex: 1, padding: '10px 0', fontSize: 13 }} onClick={() => setExportOpen(true)}>⬇ Export</button>
-              <button style={{ ...btnOutline, padding: '10px 14px', fontSize: 13, color: 'var(--color-muted)' }} onClick={() => setSelectMode(true)}>☑ Select</button>
+              <button style={{ ...btnOutline, flex: 1, padding: '10px 0', fontSize: 13 }} onClick={() => setSelectMode(true)}>☑ Select</button>
             </div>
             <div>
               <input type="search" placeholder="🔍  Search…" value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: 10 }} />
@@ -445,7 +444,6 @@ function TransactionsContent() {
             </div>
           </>
         ) : (
-          /* Select mode toolbar */
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, padding: '10px 14px' }}>
             <Checkbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} />
             <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--color-sub)' }}>

@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import { useStore } from '@/store/useStore'
 import { useToast } from '@/components/ui/Toast'
-import { fmt, fmtDT, catIcon } from '@/lib/helpers'
-import { PERSON_LABELS } from '@/lib/constants'
+import { fmt, fmtDT } from '@/lib/helpers'
+import { getPersonLabels } from '@/lib/constants'
 import type { Transaction } from '@/lib/types'
 import Modal from '@/components/ui/Modal'
 import TxForm from './TxForm'
@@ -17,7 +17,7 @@ interface TxRowProps {
 }
 
 export default function TxRow({ tx, showAccount = true, isPerson = false, disableExpand = false, onRowClick }: TxRowProps) {
-  const { accounts, deleteTransaction } = useStore()
+  const { accounts, categories, deleteTransaction } = useStore()
   const { toast } = useToast()
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -28,7 +28,15 @@ export default function TxRow({ tx, showAccount = true, isPerson = false, disabl
   const col = tx.type === 'income' ? 'var(--color-income)' : tx.type === 'transfer' ? 'var(--color-transfer)' : 'var(--color-expense)'
   const sign = tx.type === 'income' ? '+' : tx.type === 'transfer' ? '→' : '−'
   const bc = tx.type === 'income' ? 'badge-income' : tx.type === 'transfer' ? 'badge-transfer' : 'badge-expense'
-  const typeLabel = isPerson && tx.type !== 'transfer' ? PERSON_LABELS[tx.type as 'income' | 'expense'] : tx.type.toUpperCase()
+
+  // Dynamic emoji from categories store
+  const catObj = categories.find(c => c.name === tx.category)
+  const emoji = catObj?.emoji || '📌'
+
+  // Relationship-aware label for person accounts
+  const rel = isPerson && acc ? getPersonLabels(acc.relationship_type) : null
+  const typeLabel = rel && tx.type !== 'transfer'
+    ? (tx.type === 'income' ? rel.incomeLbl || 'INCOME' : rel.expenseLbl || 'EXPENSE')
   const { date, time } = fmtDT(tx.txn_at || tx.created_at)
 
   async function handleDelete() {
@@ -52,7 +60,7 @@ export default function TxRow({ tx, showAccount = true, isPerson = false, disabl
           }}
         >
           <div style={{ width: 40, height: 40, borderRadius: 11, background: 'var(--color-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, marginTop: 1 }}>
-            {catIcon(tx.category)}
+            {emoji}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
