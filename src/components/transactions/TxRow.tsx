@@ -12,9 +12,11 @@ interface TxRowProps {
   tx: Transaction
   showAccount?: boolean
   isPerson?: boolean
+  disableExpand?: boolean
+  onRowClick?: () => void
 }
 
-export default function TxRow({ tx, showAccount = true, isPerson = false }: TxRowProps) {
+export default function TxRow({ tx, showAccount = true, isPerson = false, disableExpand = false, onRowClick }: TxRowProps) {
   const { accounts, deleteTransaction } = useStore()
   const { toast } = useToast()
   const [expanded, setExpanded] = useState(false)
@@ -42,7 +44,13 @@ export default function TxRow({ tx, showAccount = true, isPerson = false }: TxRo
   return (
     <>
       <div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, cursor: 'pointer', padding: '2px 0' }} onClick={() => setExpanded(p => !p)}>
+        <div
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 11, cursor: 'pointer', padding: '2px 0' }}
+          onClick={() => {
+            if (onRowClick) { onRowClick(); return }
+            if (!disableExpand) setExpanded(p => !p)
+          }}
+        >
           <div style={{ width: 40, height: 40, borderRadius: 11, background: 'var(--color-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, marginTop: 1 }}>
             {catIcon(tx.category)}
           </div>
@@ -62,11 +70,11 @@ export default function TxRow({ tx, showAccount = true, isPerson = false }: TxRo
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: col }}>{sign}{fmt(tx.amount)}</div>
-            <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 3 }}>{expanded ? '▲' : '▼'}</div>
+            {!disableExpand && <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 3 }}>{expanded ? '▲' : '▼'}</div>}
           </div>
         </div>
 
-        {expanded && (
+        {expanded && !disableExpand && (
           <div style={{ display: 'flex', gap: 8, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-border)' }}>
             <button className="edbtn" onClick={() => { setEditing(true); setExpanded(false) }}>✏️ Edit</button>
             <button className="dlbtn" onClick={() => setConfirming(true)}>🗑️ Delete</button>
