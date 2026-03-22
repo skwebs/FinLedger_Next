@@ -11,6 +11,7 @@ import AccForm from '@/components/accounts/AccForm'
 import FilterPills from '@/components/ui/FilterPills'
 import { fmt, monthTxs, ccTxs, getCCCycle, fmtShort, daysLeft, buildTxnAt, nowDate, nowTime } from '@/lib/helpers'
 import { getPersonLabels, CATS } from '@/lib/constants'
+import type { Transaction, TxType, ImportRow } from '@/lib/types'
 
 type Filter = 'all' | 'expense' | 'income' | 'transfer'
 
